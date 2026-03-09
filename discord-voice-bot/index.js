@@ -45,7 +45,7 @@ const player = createAudioPlayer();
 let busy = false;
 let textChannel = null;
 
-// --- OpenClaw WebSocketクライアント ---
+// --- OpenClaw WebSocket Client ---
 
 class OpenClawClient {
   constructor(baseUrl, token, sessionKey) {
@@ -59,7 +59,7 @@ class OpenClawClient {
     this._connectPromise = null;
   }
 
-  // WebSocket接続 + チャレンジ認証
+  // Establish WebSocket connection + challenge auth
   connect() {
     if (this._connectPromise) return this._connectPromise;
     this._connectPromise = new Promise((resolve, reject) => {
@@ -72,7 +72,7 @@ class OpenClawClient {
         const msg = JSON.parse(data.toString());
 
         if (msg.type === "event" && msg.event === "connect.challenge") {
-          // チャレンジ受信 → connect リクエスト送信
+          // Challenge received -> send connect request
           this._request("connect", {
             minProtocol: 3, maxProtocol: 3,
             client: {
@@ -92,7 +92,7 @@ class OpenClawClient {
           return;
         }
 
-        // リクエスト/レスポンス処理
+        // Request/response handling
         if (msg.type === "res") {
           const p = this.pending.get(msg.id);
           if (p) {
@@ -102,12 +102,12 @@ class OpenClawClient {
           return;
         }
 
-        // その他のイベントをログ
+        // Log other events
         if (msg.type === "event" && msg.event !== "agent" && msg.event !== "connect.challenge" && msg.event !== "tick") {
           console.log("[OpenClaw] event:", msg.event, JSON.stringify(msg).slice(0, 200));
         }
 
-        // agentイベント: チャット応答のテキストを収集
+        // Agent events: collect streaming chat response text
         if (msg.type === "event" && msg.event === "agent") {
           if (DEBUG_AUDIO) {
             console.log("[OpenClaw] agent event:", JSON.stringify(msg).slice(0, 300));
@@ -115,7 +115,7 @@ class OpenClawClient {
           const { runId, stream, data: evData } = msg.payload || msg;
           let p = this.pending.get(runId);
 
-          // pendingにまだ登録されていない場合はバッファに溜める
+          // Buffer events that arrive before chat.send returns runId
           if (!p) {
             if (!this._eventBuffer.has(runId)) {
               this._eventBuffer.set(runId, { chunks: [], finished: false });
@@ -150,12 +150,12 @@ class OpenClawClient {
         console.log(`[OpenClaw] WebSocket closed: ${code} ${reason.toString()}`);
         this.connected = false;
         this._connectPromise = null;
-        // 保留中のリクエストをすべて拒否
+        // Reject all pending requests
         for (const [, p] of this.pending) {
           p.reject(new Error("OpenClaw connection closed"));
         }
         this.pending.clear();
-        // 自動再接続
+        // Auto-reconnect
         console.log("[OpenClaw] Reconnecting in 5s...");
         setTimeout(() => this.connect().catch(e => console.error("[OpenClaw] Reconnect failed:", e.message)), 5000);
       });
@@ -167,7 +167,7 @@ class OpenClawClient {
     return this._connectPromise;
   }
 
-  // 低レベルリクエスト送信
+  // Low-level request send
   _request(method, params) {
     const id = randomUUID();
     return new Promise((resolve, reject) => {
@@ -176,15 +176,14 @@ class OpenClawClient {
     });
   }
 
-  // チャットメッセージ送信 → 応答テキスト全文を返す
+  // Send chat message and return full response text
   async chat(message) {
     if (!this.connected) await this.connect();
 
-    // agentイベント収集用のPromiseを先に作る
     return new Promise((resolve, reject) => {
       const idempotencyKey = randomUUID();
 
-      // chat.sendのレスポンスでrunIdが返るので、それをpendingに登録
+      // chat.send response returns runId, which we register in pending
       this._request("chat.send", {
         sessionKey: this.sessionKey,
         message,
@@ -194,7 +193,7 @@ class OpenClawClient {
         const runId = result.runId;
         if (!runId) { reject(new Error("OpenClaw: no runId returned")); return; }
 
-        // 既にバッファされたイベントがあれば引き継ぐ
+        // Inherit any already-buffered events
         const buffered = this._eventBuffer.get(runId);
         this._eventBuffer.delete(runId);
         const chunks = buffered ? buffered.chunks : [];
@@ -207,7 +206,7 @@ class OpenClawClient {
 
         this.pending.set(runId, { resolve, reject, chunks });
 
-        // タイムアウト 60秒
+        // 60s timeout
         setTimeout(() => {
           if (this.pending.has(runId)) {
             const p = this.pending.get(runId);
@@ -271,8 +270,8 @@ function connectToVoice(guild) {
   return connection;
 }
 
+// Minimal WAV header for 16-bit PCM
 function bufferToWav(pcmBuffer, sampleRate = 48000, channels = 1) {
-  // 超ミニマムWAVヘッダ付与（16-bit PCM）
   const bytesPerSample = 2;
   const blockAlign = channels * bytesPerSample;
   const byteRate = sampleRate * blockAlign;
@@ -283,13 +282,13 @@ function bufferToWav(pcmBuffer, sampleRate = 48000, channels = 1) {
   header.writeUInt32LE(36 + dataSize, 4);
   header.write("WAVE", 8);
   header.write("fmt ", 12);
-  header.writeUInt32LE(16, 16);          // PCM fmt chunk size
-  header.writeUInt16LE(1, 20);           // PCM format
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
   header.writeUInt16LE(channels, 22);
   header.writeUInt32LE(sampleRate, 24);
   header.writeUInt32LE(byteRate, 28);
   header.writeUInt16LE(blockAlign, 32);
-  header.writeUInt16LE(16, 34);          // bits per sample
+  header.writeUInt16LE(16, 34);
   header.write("data", 36);
   header.writeUInt32LE(dataSize, 40);
 
@@ -305,12 +304,12 @@ async function setupReceiver(connection) {
   }
 
   receiver.speaking.on("start", async (userId) => {
-    // ボット自身の音声を無視
+    // Ignore the bot's own audio
     if (userId === botUserId) return;
-    if (busy) return; // 暴走防止：同時処理しない
+    if (busy) return;
     busy = true;
 
-    // busyスタック防止：30秒後に強制解放
+    // Safety timeout: force-release busy lock after 30s
     const busyTimeout = setTimeout(() => {
       if (busy) {
         console.warn("[Pipeline] busy timeout, forcing release");
@@ -322,7 +321,7 @@ async function setupReceiver(connection) {
       const opusStream = receiver.subscribe(userId, {
         end: {
           behavior: EndBehaviorType.AfterSilence,
-          duration: 800 // 0.8秒無音で終了
+          duration: 800 // End after 0.8s of silence
         }
       });
 
@@ -334,7 +333,7 @@ async function setupReceiver(connection) {
       const pcmChunks = [];
       const pcmStream = opusStream.pipe(decoder);
 
-      // 最大収録 6秒（長すぎると遅延が悪化）
+      // Max recording 6s to keep latency low
       const timeout = setTimeout(() => {
         try { opusStream.destroy(); } catch {}
       }, 6000);
@@ -345,7 +344,7 @@ async function setupReceiver(connection) {
         clearTimeout(timeout);
 
         const pcm = Buffer.concat(pcmChunks);
-        if (pcm.length < 48000 * 2 * 1 * 0.6) { // 0.6秒未満は捨てる
+        if (pcm.length < 48000 * 2 * 1 * 0.6) { // Discard audio shorter than 0.6s
           clearTimeout(busyTimeout);
           busy = false;
           return;
@@ -353,7 +352,7 @@ async function setupReceiver(connection) {
 
         const wav = bufferToWav(pcm);
 
-        // デバッグ: 音声受信情報をログ出力 + WAVファイル保存（直近10件のみ保持）
+        // Debug: log audio info + save WAV files (keep last 10)
         if (DEBUG_AUDIO) {
           const durationSec = (pcm.length / (48000 * 2 * 1)).toFixed(2);
           console.log(`[DEBUG_AUDIO] userId=${userId} pcmBytes=${pcm.length} duration=${durationSec}s`);
@@ -364,7 +363,7 @@ async function setupReceiver(connection) {
             fs.writeFileSync(`${debugDir}/${timestamp}_${userId}.wav`, wav);
             console.log(`[DEBUG_AUDIO] Saved ${debugDir}/${timestamp}_${userId}.wav`);
 
-            // 古いファイルを削除（直近10件のみ保持）
+            // Remove old files, keep only last 10
             const files = fs.readdirSync(debugDir)
               .filter(f => f.endsWith(".wav"))
               .sort();
@@ -384,14 +383,13 @@ async function setupReceiver(connection) {
             return;
           }
 
-          // ここで「起動ワード」必須にすると誤作動が減る（推奨）
-          // 例：先頭が「クロウ」or「OpenClaw」のときだけ通す
-          // if (!/^openclaw|クロウ/i.test(text)) { busy = false; return; }
+          // Optional: wake word filter to reduce false activations
+          // if (!/^openclaw/i.test(text)) { clearTimeout(busyTimeout); busy = false; return; }
 
           const reply = await openclawChat(text);
-          console.log(`[Pipeline] STT="${text}" → OpenClaw="${reply.slice(0, 100)}"`);
+          console.log(`[Pipeline] STT="${text}" -> OpenClaw="${reply.slice(0, 100)}"`);
 
-          // テキストチャンネルに履歴を残す
+          // Post conversation history to text channel
           if (textChannel) {
             try {
               await textChannel.send(`🎤 **${text}**\n💬 ${reply}`);
@@ -400,8 +398,8 @@ async function setupReceiver(connection) {
             }
           }
 
-          // 長文を音声化すると地獄なので短く切る（重要）
-          const spoken = reply.length > 220 ? reply.slice(0, 220) + "。続きはテキストで。" : reply;
+          // Truncate long replies for TTS to avoid excessive playback time
+          const spoken = reply.length > 220 ? reply.slice(0, 220) + "..." : reply;
 
           const ttsWav = await ttsToWavBuffer(spoken);
           console.log(`[Pipeline] TTS received ${ttsWav.length} bytes`);
@@ -442,7 +440,7 @@ client.on("ready", async () => {
   const guild = await client.guilds.fetch(GUILD_ID);
   const fullGuild = await guild.fetch();
 
-  // テキストメッセージ送信用チャンネル取得
+  // Fetch text channel for posting conversation history
   try {
     textChannel = await client.channels.fetch(TEXT_CHANNEL_ID);
     console.log(`Text channel: #${textChannel.name} (${TEXT_CHANNEL_ID})`);
@@ -463,7 +461,7 @@ client.on("ready", async () => {
       console.error("[Connection] error:", err);
     });
 
-    // 切断時に自動再接続
+    // Auto-reconnect on disconnect
     connection.on("stateChange", (oldState, newState) => {
       if (newState.status === VoiceConnectionStatus.Disconnected) {
         console.log("[Connection] Disconnected, reconnecting in 3s...");

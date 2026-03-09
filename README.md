@@ -1,31 +1,31 @@
 # Voice-OpenClaw
 
-Discord音声ボット。ボイスチャンネルの音声を認識し、OpenClaw（AIエージェント）と会話して、音声で返答します。
+A Discord voice bot that captures voice channel audio, transcribes it, queries an OpenClaw AI agent, and plays back the synthesized response.
 
-## アーキテクチャ
+## Architecture
 
 ```
-Discord Voice → Opus→PCM→WAV → STT → テキスト → OpenClaw → 返答テキスト → TTS → WAV → Discord再生
+Discord Voice -> Opus->PCM->WAV -> STT -> text -> OpenClaw -> reply text -> TTS -> WAV -> Discord Audio Player
 ```
 
-4つのDockerサービスで構成:
+Four Docker services:
 
-| サービス | 説明 | ポート |
-|---------|------|--------|
-| **openclaw** | AIエージェント (Claude Sonnet 4.6) | 18789, 18791 |
-| **stt** | 音声認識 (faster-whisper, 日本語) | 8000 |
-| **tts** | 音声合成 (edge-tts, Microsoft Neural) | 8001 |
-| **discord-voice-bot** | Discordボイスボット (Node.js) | - |
+| Service | Description | Port |
+|---------|-------------|------|
+| **openclaw** | AI agent backend (Claude Sonnet 4.6) | 18789, 18791 |
+| **stt** | Speech-to-text (faster-whisper, Japanese) | 8000 |
+| **tts** | Text-to-speech (edge-tts, Microsoft Neural) | 8001 |
+| **discord-voice-bot** | Discord voice bot (Node.js) | - |
 
-## セットアップ
+## Setup
 
-### 1. 環境変数
+### 1. Environment Variables
 
 ```bash
 cp .env.template .env
 ```
 
-`.env` を編集:
+Edit `.env`:
 
 ```
 DISCORD_BOT_TOKEN=your_discord_bot_token
@@ -34,54 +34,54 @@ DISCORD_VOICE_CHANNEL_ID=your_voice_channel_id
 OPENCLAW_TOKEN=your_openclaw_gateway_token
 ```
 
-### 2. OpenClaw設定
+### 2. OpenClaw Configuration
 
 ```bash
 cp openclaw/openclaw.json.template openclaw/openclaw.json
 ```
 
-`openclaw.json` の `gateway.auth.token` を `.env` の `OPENCLAW_TOKEN` と一致させてください。
+Set `gateway.auth.token` in `openclaw.json` to match the `OPENCLAW_TOKEN` in `.env`.
 
-初回起動時にブラウザで `http://localhost:18791` にアクセスし、デバイスペアリングとAnthropicトークン認証を行います。
+On first startup, visit `http://localhost:18791` to complete device pairing and Anthropic token authentication.
 
-### 3. 起動
+### 3. Start
 
 ```bash
 docker compose up -d --build
 ```
 
-## コマンド
+## Commands
 
 ```bash
-# 全サービス起動
+# Start all services
 docker compose up -d
 
-# ビルド＆起動（コード変更後）
+# Build and start (after code changes)
 docker compose up -d --build
 
-# ログ確認
+# View logs
 docker compose logs -f discord-voice-bot
 docker compose logs -f stt
 docker compose logs -f tts
 
-# 単体サービス再ビルド
+# Rebuild a single service
 docker compose build discord-voice-bot
 docker compose up -d discord-voice-bot
 ```
 
-## 機能
+## Features
 
-- ボイスチャンネルの音声をリアルタイムで認識（日本語）
-- OpenClaw AIエージェントへの自動問い合わせ
-- 音声合成による返答再生（Microsoft Neural日本語音声）
-- テキストチャンネルへの会話履歴の自動投稿
-- 自動再接続（Discord切断時・OpenClaw切断時）
-- デバッグモード（`DEBUG_AUDIO=true`でWAVファイル保存）
+- Real-time voice recognition from Discord voice channels (Japanese)
+- Automatic query to OpenClaw AI agent
+- Voice response via Microsoft Neural Japanese TTS
+- Conversation history posted to Discord text channel
+- Auto-reconnect on Discord/OpenClaw disconnection
+- Debug mode (`DEBUG_AUDIO=true`) saves WAV files for inspection
 
-## 制限事項
+## Limitations
 
-- 同時に1つの発話のみ処理（busyロック）
-- 1発話あたり最大6秒
-- 0.6秒未満の音声は無視
-- 220文字を超える返答はTTS時に切り詰め
-- TTS（edge-tts）はインターネット接続が必要
+- Processes one utterance at a time (busy lock)
+- Max 6 seconds per utterance
+- Audio shorter than 0.6 seconds is discarded
+- Replies longer than 220 characters are truncated for TTS
+- TTS (edge-tts) requires internet connectivity

@@ -8,7 +8,7 @@ import subprocess
 
 app = FastAPI()
 
-# 日本語音声: ja-JP-NanamiNeural(女性), ja-JP-KeitaNeural(男性)
+# Japanese voices: ja-JP-NanamiNeural (female), ja-JP-KeitaNeural (male)
 VOICE = os.environ.get("TTS_VOICE", "ja-JP-NanamiNeural")
 
 class Req(BaseModel):
@@ -25,11 +25,11 @@ async def synthesize(req: Req):
     wav_path = mp3_path.replace(".mp3", ".wav")
 
     try:
-        # edge-ttsでMP3生成
+        # Generate MP3 via edge-tts
         communicate = edge_tts.Communicate(text, VOICE)
         await communicate.save(mp3_path)
 
-        # MP3→WAV変換（discord.jsのcreateAudioResourceが扱いやすい）
+        # Convert MP3 to WAV (48kHz mono, compatible with Discord audio player)
         result = subprocess.run(
             ["ffmpeg", "-y", "-i", mp3_path, "-ar", "48000", "-ac", "1", "-f", "wav", wav_path],
             stdout=subprocess.PIPE,

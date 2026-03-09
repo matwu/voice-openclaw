@@ -13,12 +13,11 @@ logger.addHandler(file_handler)
 
 app = FastAPI()
 
-# CPU最小：base / small が現実的（精度と速度のバランス）
+# "small" model on CPU with int8 quantization for speed/accuracy balance
 model = WhisperModel("small", device="cpu", compute_type="int8")
 
 @app.post("/transcribe")
 async def transcribe(file: UploadFile = File(...)):
-    # 入力は wav/pcm を想定（bot側でwavにします）
     suffix = os.path.splitext(file.filename or "")[1] or ".wav"
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         tmp.write(await file.read())
@@ -28,7 +27,7 @@ async def transcribe(file: UploadFile = File(...)):
         segments, info = model.transcribe(tmp_path, language="ja", vad_filter=True)
         text = "".join([s.text for s in segments]).strip()
     except ValueError:
-        # VADが音声なしと判定した場合（max() arg is an empty sequence）
+        # VAD determined no speech (empty sequence error)
         logger.info("[STT] (no speech detected)")
         os.unlink(tmp_path)
         return {"text": "", "language": "", "duration": 0}
