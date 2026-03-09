@@ -1,0 +1,71 @@
+{
+  "meta": {
+    "lastTouchedVersion": "2026.3.2"
+  },
+  "auth": {
+    "profiles": {
+      "anthropic:default": {
+        "provider": "anthropic",
+        "mode": "token"
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "anthropic/claude-sonnet-4-6"
+      },
+      "models": {
+        "anthropic/claude-sonnet-4-6": {
+          "alias": "sonnet",
+          "params": {
+            "cacheRetention": "short"
+          }
+        }
+      },
+      "workspace": "/home/node/.openclaw/workspace",
+      "contextPruning": {
+        "mode": "cache-ttl",
+        "ttl": "1h"
+      },
+      "compaction": {
+        "mode": "safeguard"
+      },
+      "heartbeat": {
+        "every": "30m"
+      }
+    }
+  },
+  "tools": {
+    "profile": "full"
+  },
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto",
+    "restart": true,
+    "ownerDisplay": "raw"
+  },
+  "session": {
+    "dmScope": "per-channel-peer"
+  },
+  "gateway": {
+    "port": 18789,
+    "mode": "local",
+    "bind": "lan",
+    "controlUi": {
+      "allowedOrigins": [
+        "http://localhost:18789",
+        "http://127.0.0.1:18789",
+        "http://openclaw:18789"
+      ]
+    },
+    "auth": {
+      "mode": "token",
+      "token": "YOUR_OPENCLAW_TOKEN_HERE"
+    },
+    "tailscale": {
+      "mode": "off",
+      "resetOnExit": false
+    }
+  }
+}

@@ -1,0 +1,47 @@
+services:
+  openclaw:
+    image: ghcr.io/openclaw/openclaw:latest
+    container_name: openclaw
+    ports:
+      - "18789:18789"  # gateway (websocket)
+      - "18791:18791"  # browser server (http)
+    volumes:
+      - ./openclaw:/home/node/.openclaw
+    restart: unless-stopped
+
+  stt:
+    build: ./stt
+    container_name: stt
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./stt/logs:/app/logs
+
+  tts:
+    build: ./tts
+    container_name: tts
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./tts/models:/models
+
+  discord-voice-bot:
+    build: ./discord-voice-bot
+    container_name: discord-voice-bot
+    restart: unless-stopped
+    environment:
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - DISCORD_GUILD_ID=${DISCORD_GUILD_ID}
+      - DISCORD_VOICE_CHANNEL_ID=${DISCORD_VOICE_CHANNEL_ID}
+      - OPENCLAW_BASE_URL=http://openclaw:18789
+      - OPENCLAW_TOKEN=${OPENCLAW_TOKEN}
+      - STT_URL=${STT_URL}
+      - TTS_URL=${TTS_URL}
+      - AUTO_JOIN=${AUTO_JOIN}
+      - DEBUG_AUDIO=true
+    volumes:
+      - ./discord-voice-bot/debug:/app/debug
+    depends_on:
+      - openclaw
+      - stt
+      - tts

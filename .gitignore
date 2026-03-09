@@ -1,0 +1,22 @@
+.env
+node_modules/
+
+# debug audio files
+discord-voice-bot/debug/
+
+# openclaw runtime data
+openclaw/agents/
+openclaw/devices/
+openclaw/identity/
+openclaw/logs/
+openclaw/cron/
+openclaw/canvas/
+openclaw/update-check.json
+openclaw/openclaw.json.bak*
+openclaw/openclaw.json
+
+# stt logs
+stt/logs/
+
+# tts models (too large for git)
+tts/models/
